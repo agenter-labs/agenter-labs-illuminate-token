@@ -5,15 +5,15 @@ return [
     /**
      * Token life time
      */
-    'ttl' => 3600,
+    'ttl' => env('TOKEN_TTL', 3600),
 
     /**
      * Hash key
      */
-    'hash_key' => 'base64:EDmtosootInJAcg0EkUq8gVOr4QwlTVan5Jbz/7mUCY=',
+    'hash_key' => env('APP_KEY', ''),
 
     /**
      * store
      */
-    'store' => 'array'
+    'store' => env('TOKEN_STORE', 'array')
 ];
