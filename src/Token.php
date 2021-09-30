@@ -82,6 +82,14 @@ class Token implements Responsable
     }
 
     /**
+     * Get payload
+     */
+    public function getPayload() {
+
+        return $this->payload;
+    }
+
+    /**
      * Get Expire in seconds
      */
     public function getExpireIn() {
