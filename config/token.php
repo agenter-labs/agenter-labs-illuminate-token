@@ -15,5 +15,7 @@ return [
     /**
      * store
      */
-    'store' => env('TOKEN_STORE', 'array')
+    'store' => env('TOKEN_STORE', 'array'),
+
+    'cipher' => env('APP_CIPHER', 'AES-256-CBC'),
 ];

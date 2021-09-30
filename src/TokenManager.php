@@ -8,6 +8,7 @@ use AgenterLab\Token\Exceptions\TokenNotFoundException;
 use AgenterLab\Token\Exceptions\TokenExpiredException;
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Support\Str;
+use Illuminate\Encryption\Encrypter;
 
 class TokenManager
 {
@@ -96,7 +97,9 @@ class TokenManager
      * @param string $token
      * @param bool $strict Check in cache
      * 
-     * @return array
+     * @return \AgenterLab\Token\Token
+     * @throws TokenNotFoundException
+     * @throws TokenExpiredException
      */
     public function validate(string $type, string $token, bool $strict = false) {
 
@@ -113,7 +116,9 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        if (time() > $expireAt) {
+        $ttl =  $expireAt - time();
+
+        if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
         }
 
@@ -126,7 +131,18 @@ class TokenManager
             }
         }
 
-        return [$tokenId, $tokenParts];
+        $tokenParts = count($tokenParts) == 1 ? $tokenParts[0] : $tokenParts;
+
+        $token = new Token(
+            $tokenId,
+            $tokenType, 
+            0, 
+            $ttl, 
+            $expireAt, 
+            $token,
+            $tokenParts
+        );
+        return $token;
     }
 
     /**
@@ -189,19 +205,39 @@ class TokenManager
      * Encrypt using public key
      * 
      * @param string $type
-     * @param mixed $data
+     * @param mixed $payload
      * @param string $publicKey
+     * @param int $owner
      * 
-     * @return string
+     * @return \AgenterLab\Token\Token
      */
-    public function encrypt(string $type, $data, string $publicKey) {
+    public function encrypt(string $type, $payload, string $publicKey, int $owner = 0) {
 
+        $id = $this->getId();
+        $data = is_array($payload) ? $payload : [$payload];
+        $data[] = $id;
         list($data, $ttl, $expireAt) = $this->format($type, $data);
 
-        $cryptText = '';
-        openssl_public_encrypt ($data, $cryptText, $publicKey);
+        $key = Encrypter::generateKey($this->config['cipher']);
+        $keyToken = self::encodeUrlSafe((new Encrypter($key, $this->config['cipher']))->encryptString($data));
 
-        return self::encodeUrlSafe(base64_encode($cryptText));
+    
+        $cryptText = '';
+        openssl_public_encrypt ($key, $cryptText, $publicKey);
+        $cryptText = self::encodeUrlSafe(base64_encode($cryptText));
+
+        $token = $cryptText . '.' . $keyToken;
+
+        $token = new Token(
+            $id,
+            $type, 
+            $owner, 
+            $ttl, 
+            $expireAt, 
+            $token,
+            $payload
+        );
+        return $token;
     }
 
      /**
@@ -211,33 +247,55 @@ class TokenManager
      * @param string $data
      * @param string $privateKey
      * 
-     * @return array 
+     * @return \AgenterLab\Token\Token
+     * @throws TokenNotFoundException
+     * @throws TokenExpiredException
      */
     public function decrypt(string $type, string $cryptText, string $privateKey) {
 
-        $cryptText = base64_decode(self::decodeUrlSafe($cryptText));
+        $parts = explode('.', $cryptText);
+
+        if (count($parts) != 2) {
+            throw new TokenNotFoundException;
+        }
+
+        $cryptText = base64_decode(self::decodeUrlSafe($parts[0]));
   
-        $decrypted = null;
-        $success = openssl_private_decrypt($cryptText, $decrypted, $privateKey);
+        $key = null;
+        $success = openssl_private_decrypt($cryptText, $key, $privateKey);
 
         if (!$success) {
             throw new TokenNotFoundException;
         }
 
+        $decrypted = self::encodeUrlSafe((new Encrypter($key, $this->config['cipher']))->decryptString($parts[1]));
+
         $tokenParts = explode('|', $decrypted);
         $expireAt = array_pop($tokenParts);
         $tokenType = array_pop($tokenParts);
-        $tokenId = array_pop($tokenParts);
 
         if ($type != $tokenType) {
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        if (time() > $expireAt) {
+        $ttl =  $expireAt - time();
+
+        if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
         }
 
-        return [$tokenId, $tokenParts];
+        $tokenParts = count($tokenParts) == 1 ? $tokenParts[0] : $tokenParts;
+
+        $token = new Token(
+            $tokenId,
+            $tokenType, 
+            0, 
+            $ttl, 
+            $expireAt, 
+            $token,
+            $tokenParts
+        );
+        return $token;
     }
 
     /**
@@ -297,14 +355,13 @@ class TokenManager
      * 
      * @return array
      */
-    private function format(string $type, $data): array {
+    private function format(string $type, array $data): array {
 
         $ttl = $this->getTTL($type);
         
         $time = time();
         $expireAt = $time + $ttl;
 
-        $data = is_array($data) ? $data : [$data];
         $data[] = $type;
         $data[] = $expireAt;
         $data = implode('|', $data);
