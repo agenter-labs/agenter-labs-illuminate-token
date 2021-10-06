@@ -116,7 +116,7 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        $ttl =  $expireAt - time();
+        $ttl =  $expireAt - Token::now();
 
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
@@ -159,7 +159,7 @@ class TokenManager
      */
     private function getId(): int {
 
-        $time = time();
+        $time = Token::now();
 
         $increment = $this->store->increment('auto_id_' . $this->instanceId);
 
@@ -278,7 +278,7 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        $ttl =  $expireAt - time();
+        $ttl =  $expireAt - Token::now();
 
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
@@ -311,7 +311,7 @@ class TokenManager
     public function hash(string $type, $key, $code, $userId = 0)
     {
         $ttl = $this->getTTL($type);
-        $time = time();
+        $time = Token::now();
         $expireAt = $time + $ttl;
 
         $token = hash_hmac('sha256', Str::random(40), $this->config['hash_key']);
@@ -359,7 +359,7 @@ class TokenManager
 
         $ttl = $this->getTTL($type);
         
-        $time = time();
+        $time = Token::now();
         $expireAt = $time + $ttl;
 
         $data[] = $type;

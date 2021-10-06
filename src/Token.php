@@ -88,6 +88,7 @@ class Token implements Responsable
 
         return $this->payload;
     }
+    
 
     /**
      * Get Expire in seconds
@@ -97,7 +98,7 @@ class Token implements Responsable
             return 0;
         }
 
-        $time = time();
+        $time = self::now();
         $delta = $this->expireAt - $time;
 
         if ($delta < 0) {
@@ -120,5 +121,15 @@ class Token implements Responsable
             'token' => $this->token,
             'expire_in' => $this->getExpireIn()
         ];
+    }
+
+    /**
+     * Get time stamp
+     * @return int
+     */
+    static public function now(): int {
+        $timestamp = time()+date("Z");
+
+        return $timestamp;
     }
 }
