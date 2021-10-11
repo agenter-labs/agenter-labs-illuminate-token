@@ -74,6 +74,14 @@ class Token implements Responsable
     }
 
     /**
+     * Get ttl
+     */
+    public function getTTL() {
+
+        return $this->ttl;
+    }
+
+    /**
      * Get token
      */
     public function getToken() {
