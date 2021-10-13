@@ -74,7 +74,7 @@ class TokenManager
 
         list($data, $ttl, $expireAt) = $this->format($type, $data);
 
-        $token = self::encodeUrlSafe(app('encrypter')->encryptString($data));
+        $token = self::encodeUrlSafe($this->encrypter()->encryptString($data));
 
         $this->store->put($type . '_' . $id, $token, $ttl);
 
@@ -103,7 +103,7 @@ class TokenManager
      */
     public function validate(string $type, string $token, bool $strict = false) {
 
-        $decrypted = app('encrypter')->decryptString(
+        $decrypted = $this->encrypter()->decryptString(
             self::decodeUrlSafe($token)
         );
 
@@ -211,7 +211,7 @@ class TokenManager
         list($data, $ttl, $expireAt) = $this->format($type, $data);
 
         $key = Encrypter::generateKey($this->config['cipher']);
-        $keyToken = self::encodeUrlSafe((new Encrypter($key, $this->config['cipher']))->encryptString($data));
+        $keyToken = self::encodeUrlSafe($this->encrypter($key)->encryptString($data));
 
     
         $cryptText = '';
@@ -260,7 +260,7 @@ class TokenManager
             throw new TokenNotFoundException;
         }
 
-        $decrypted = self::encodeUrlSafe((new Encrypter($key, $this->config['cipher']))->decryptString($parts[1]));
+        $decrypted = self::encodeUrlSafe($this->encrypter($key)->decryptString($parts[1]));
 
         $tokenParts = explode('|', $decrypted);
         $expireAt = array_pop($tokenParts);
@@ -381,5 +381,18 @@ class TokenManager
      */
     public function setUid(Uid $uid) {
         $this->uid = $uid;
+    }
+
+    /**
+     * Get Encrypter
+     * 
+     * @return \Illuminate\Encryption\Encrypter
+     */
+    private function encrypter($key = null) {
+        if ($key) {
+            return new Encrypter($key, $this->config['cipher']);
+        }
+
+        return app('encrypter');
     }
 }
