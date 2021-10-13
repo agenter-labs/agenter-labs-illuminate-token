@@ -14,9 +14,8 @@ class TokenServiceProvider extends ServiceProvider
      */
     public function register()
     {
-
         $this->app->singleton('token.manager', function ($app) {
-            return new TokenManager(
+            $tokenManager = new TokenManager(
                 $app['config']->get('app.instance_id'),
                 $app->make('cache')->driver(
                     $app['config']->get('token.store')
@@ -24,6 +23,9 @@ class TokenServiceProvider extends ServiceProvider
                 $app['hash'],
                 $app['config']->get('token')
             );
+
+            $tokenManager->setUid($app->make(Uid::class));
+            return $tokenManager;
         });
 
         $this->mergeConfigFrom(__DIR__ . '/../config/token.php', 'token');

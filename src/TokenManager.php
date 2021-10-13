@@ -9,10 +9,10 @@ use AgenterLab\Token\Exceptions\TokenExpiredException;
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Support\Str;
 use Illuminate\Encryption\Encrypter;
+use AgenterLab\Uid\Uid;
 
 class TokenManager
 {
-    const MAX_ID_FACTOR = 4095;
 
     const DEFAULT_TTL = 900;
 
@@ -116,7 +116,7 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        $ttl =  $expireAt - Token::now();
+        $ttl =  $expireAt - Uid::now();
 
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
@@ -156,20 +156,11 @@ class TokenManager
 
     /**
      * Get ID
+     * 
+     * @return int
      */
     private function getId(): int {
-
-        $time = Token::now();
-
-        $increment = $this->store->increment('auto_id_' . $this->instanceId);
-
-        if ($increment == self::MAX_ID_FACTOR) {
-            $this->store->forget('auto_id_' . $this->instanceId);
-        }
-
-        $result = ($this->instanceId << 52) | ($time << 12) | ($increment<<0);
-
-        return $result;
+        return $this->uid->create();
     }
 
     /**
@@ -213,9 +204,10 @@ class TokenManager
      */
     public function encrypt(string $type, $payload, string $publicKey, int $owner = 0) {
 
-        $id = $this->getId();
+        // $id = $this->getId();
+        $id = 0;
         $data = is_array($payload) ? $payload : [$payload];
-        $data[] = $id;
+        // $data[] = $id;
         list($data, $ttl, $expireAt) = $this->format($type, $data);
 
         $key = Encrypter::generateKey($this->config['cipher']);
@@ -278,7 +270,7 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        $ttl =  $expireAt - Token::now();
+        $ttl =  $expireAt - Uid::now();
 
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
@@ -287,12 +279,12 @@ class TokenManager
         $tokenParts = count($tokenParts) == 1 ? $tokenParts[0] : $tokenParts;
 
         $token = new Token(
-            $tokenId,
+            0,
             $tokenType, 
             0, 
             $ttl, 
             $expireAt, 
-            $token,
+            implode('.', $parts),
             $tokenParts
         );
         return $token;
@@ -311,7 +303,7 @@ class TokenManager
     public function hash(string $type, $key, $code, $userId = 0)
     {
         $ttl = $this->getTTL($type);
-        $time = Token::now();
+        $time = Uid::now();
         $expireAt = $time + $ttl;
 
         $token = hash_hmac('sha256', Str::random(40), $this->config['hash_key']);
@@ -359,7 +351,7 @@ class TokenManager
 
         $ttl = $this->getTTL($type);
         
-        $time = Token::now();
+        $time = Uid::now();
         $expireAt = $time + $ttl;
 
         $data[] = $type;
@@ -380,5 +372,14 @@ class TokenManager
         $ttl = $config['ttl'] ?? $this->config['ttl'] ?? self::DEFAULT_TTL;
 
         return $ttl;
+    }
+
+    /**
+     * Set Uid
+     * 
+     * @param \AgenterLab\Uid\Uid $uid
+     */
+    public function setUid(Uid $uid) {
+        $this->uid = $uid;
     }
 }
