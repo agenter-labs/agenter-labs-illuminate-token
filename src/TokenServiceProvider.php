@@ -4,6 +4,7 @@ namespace AgenterLab\Token;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use AgenterLab\Uid\Uid;
 
 class TokenServiceProvider extends ServiceProvider
 {
