@@ -107,7 +107,7 @@ class TokenManager
      */
     public function validate(string $type, string $token, string $key = '', bool $strict = false) {
 
-        $tokenParts = explode('|', $token);
+        $tokenParts = explode(':', $token);
 
         if (count($tokenParts) != 3) {
             throw new TokenNotFoundException('Token segment invalid');
