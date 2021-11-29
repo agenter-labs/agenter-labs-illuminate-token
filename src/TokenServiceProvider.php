@@ -4,7 +4,6 @@ namespace AgenterLab\Token;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
-use AgenterLab\Uid\Uid;
 
 class TokenServiceProvider extends ServiceProvider
 {
@@ -24,8 +23,6 @@ class TokenServiceProvider extends ServiceProvider
                 $app['hash'],
                 $app['config']->get('token')
             );
-
-            $tokenManager->setUid($app->make(Uid::class));
             return $tokenManager;
         });
 

@@ -9,7 +9,6 @@ use AgenterLab\Token\Exceptions\TokenExpiredException;
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Support\Str;
 use Illuminate\Encryption\Encrypter;
-use AgenterLab\Uid\Uid;
 
 class TokenManager
 {
@@ -62,24 +61,29 @@ class TokenManager
      * 
      * @param string $type type of token
      * @param mixed $payload Token payload
+     * @param string $key
      * @param int $owner
      * 
      * @return Token
      */
-    public function create(string $type, $payload, int $owner = 0) {
+    public function create(string $type, int $payload, string $key = '', int $owner = 0) {
+        $ttl = $this->getTTL($type);
+        $time = Token::now();
+        $expireAt = $time + $ttl;
 
-        $id = $this->getId();
-        $data = is_array($payload) ? $payload : [$payload];
-        $data[] = $id;
+        $token = $this->hasher->make(
+            ($key ? $key : $this->config['hash_key']) . "\n" . 
+            $type . "\n" . 
+            $payload . "\n" . 
+            $expireAt
+        );
 
-        list($data, $ttl, $expireAt) = $this->format($type, $data);
+        $this->store->put($type . '_' . $payload, hash('sha256', $token), $ttl);
 
-        $token = self::encodeUrlSafe($this->encrypter()->encryptString($data));
+        $token = $payload . ':' . $token . ':' . $expireAt;
 
-        $this->store->put($type . '_' . $id, $token, $ttl);
-
-        $token = new Token(
-            $id,
+        return new Token(
+            $payload,
             $type, 
             $owner, 
             $ttl, 
@@ -87,7 +91,6 @@ class TokenManager
             $token,
             $payload
         );
-        return $token;
     }
 
     /**
@@ -95,54 +98,53 @@ class TokenManager
      * 
      * @param string $type
      * @param string $token
+     * @param string $key
      * @param bool $strict Check in cache
      * 
      * @return \AgenterLab\Token\Token
      * @throws TokenNotFoundException
      * @throws TokenExpiredException
      */
-    public function validate(string $type, string $token, bool $strict = false) {
+    public function validate(string $type, string $token, string $key = '', bool $strict = false) {
 
-        $decrypted = $this->encrypter()->decryptString(
-            self::decodeUrlSafe($token)
-        );
+        $tokenParts = explode('|', $token);
 
-        $tokenParts = explode('|', $decrypted);
-        $expireAt = array_pop($tokenParts);
-        $tokenType = array_pop($tokenParts);
-        $tokenId = array_pop($tokenParts);
-
-        if ($type != $tokenType) {
-            throw new TokenNotFoundException('Token type invalid');
+        if (count($tokenParts) != 3) {
+            throw new TokenNotFoundException('Token segment invalid');
         }
 
-        $ttl =  $expireAt - Uid::now();
-
+        $ttl = $tokenParts[2] - Token::now();
+        
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
         }
 
+        $data =
+            ($key ? $key : $this->config['hash_key']) . "\n" . 
+            $type . "\n" . 
+            $tokenParts[0] . "\n" . 
+            $tokenParts[2];
+
+        if (!$this->hasher->check($data, $tokenParts[1])) {
+            throw new TokenNotFoundException('Token type invalid');
+        }
+
         if ($strict) {
-
-            $exists = $this->store->get($type . '_' . $tokenId);
-
+            $exists = $this->store->get($type . '_' . $tokenParts[0]);
             if (empty($exists)) {
                 throw new TokenNotFoundException;
             }
         }
 
-        $tokenParts = count($tokenParts) == 1 ? $tokenParts[0] : $tokenParts;
-
-        $token = new Token(
-            $tokenId,
-            $tokenType, 
+        return new Token(
+            $tokenParts[0],
+            $type, 
             0, 
             $ttl, 
-            $expireAt, 
+            $tokenParts[2], 
             $token,
-            $tokenParts
+            $tokenParts[0]
         );
-        return $token;
     }
 
     /**
@@ -152,15 +154,6 @@ class TokenManager
      */
     public function remove(string $key) {
         $this->store->forget($key);
-    }
-
-    /**
-     * Get ID
-     * 
-     * @return int
-     */
-    private function getId(): int {
-        return $this->uid->create();
     }
 
     /**
@@ -204,7 +197,6 @@ class TokenManager
      */
     public function encrypt(string $type, $payload, string $publicKey, int $owner = 0) {
 
-        // $id = $this->getId();
         $id = 0;
         $data = is_array($payload) ? $payload : [$payload];
         // $data[] = $id;
@@ -270,7 +262,7 @@ class TokenManager
             throw new TokenNotFoundException('Token type invalid');
         }
 
-        $ttl =  $expireAt - Uid::now();
+        $ttl =  $expireAt - Token::now();
 
         if ( $ttl <= 0 ) {
             throw new TokenExpiredException;
@@ -303,7 +295,7 @@ class TokenManager
     public function hash(string $type, $key, $code, $userId = 0)
     {
         $ttl = $this->getTTL($type);
-        $time = Uid::now();
+        $time = Token::now();
         $expireAt = $time + $ttl;
 
         $token = hash_hmac('sha256', Str::random(40), $this->config['hash_key']);
@@ -351,7 +343,7 @@ class TokenManager
 
         $ttl = $this->getTTL($type);
         
-        $time = Uid::now();
+        $time = Token::now();
         $expireAt = $time + $ttl;
 
         $data[] = $type;
@@ -372,15 +364,6 @@ class TokenManager
         $ttl = $config['ttl'] ?? $this->config['ttl'] ?? self::DEFAULT_TTL;
 
         return $ttl;
-    }
-
-    /**
-     * Set Uid
-     * 
-     * @param \AgenterLab\Uid\Uid $uid
-     */
-    public function setUid(Uid $uid) {
-        $this->uid = $uid;
     }
 
     /**
