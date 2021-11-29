@@ -66,7 +66,7 @@ class TokenManager
      * 
      * @return Token
      */
-    public function create(string $type, int $payload, string $key = '', int $owner = 0) {
+    public function create(string $type, $payload, string $key = '', int $owner = 0) {
         $ttl = $this->getTTL($type);
         $time = Token::now();
         $expireAt = $time + $ttl;
@@ -83,7 +83,7 @@ class TokenManager
         $token = $payload . ':' . $token . ':' . $expireAt;
 
         return new Token(
-            $payload,
+            0,
             $type, 
             $owner, 
             $ttl, 
@@ -137,7 +137,7 @@ class TokenManager
         }
 
         return new Token(
-            $tokenParts[0],
+            0,
             $type, 
             0, 
             $ttl, 
